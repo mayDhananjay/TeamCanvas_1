@@ -1,9 +1,25 @@
-import { createSlice } from "@reduxjs/toolkit";
-import { dummyWorkspaces } from "../assets/assets";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import api from "../configs/api";
+
+export const fetchWorkspaces = createAsyncThunk(
+    "workspace/fetchWorkspaces",
+    async ({ getToken }, { rejectWithValue }) => {
+        try {
+            const { data } = await api.get("/api/workspace", {
+                headers: { Authorization: `Bearer ${await getToken()}` },
+            });
+            return data.workspaces || data.workspace || [];
+        } catch (err) {
+            const message = err?.response?.data?.message || err.message;
+            console.log(message);
+            return rejectWithValue(message);
+        }
+    }
+);
 
 const initialState = {
-    workspaces: dummyWorkspaces || [],
-    currentWorkspace: dummyWorkspaces[1],
+    workspaces: [],
+    currentWorkspace: null,
     loading: false,
 };
 
@@ -21,7 +37,6 @@ const workspaceSlice = createSlice({
         addWorkspace: (state, action) => {
             state.workspaces.push(action.payload);
 
-            // set current workspace to the new workspace
             if (state.currentWorkspace?.id !== action.payload.id) {
                 state.currentWorkspace = action.payload;
             }
@@ -31,7 +46,6 @@ const workspaceSlice = createSlice({
                 w.id === action.payload.id ? action.payload : w
             );
 
-            // if current workspace is updated, set it to the updated workspace
             if (state.currentWorkspace?.id === action.payload.id) {
                 state.currentWorkspace = action.payload;
             }
@@ -41,22 +55,18 @@ const workspaceSlice = createSlice({
         },
         addProject: (state, action) => {
             state.currentWorkspace.projects.push(action.payload);
-            // find workspace by id and add project to it
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? { ...w, projects: w.projects.concat(action.payload) } : w
             );
         },
         addTask: (state, action) => {
-
             state.currentWorkspace.projects = state.currentWorkspace.projects.map((p) => {
-                console.log(p.id, action.payload.projectId, p.id === action.payload.projectId);
                 if (p.id === action.payload.projectId) {
                     p.tasks.push(action.payload);
                 }
                 return p;
             });
 
-            // find workspace and project by id and add task to it
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
@@ -73,7 +83,7 @@ const workspaceSlice = createSlice({
                     );
                 }
             });
-            // find workspace and project by id and update task in it
+
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
@@ -91,7 +101,7 @@ const workspaceSlice = createSlice({
                 p.tasks = p.tasks.filter((t) => !action.payload.includes(t.id));
                 return p;
             });
-            // find workspace and project by id and delete task from it
+
             state.workspaces = state.workspaces.map((w) =>
                 w.id === state.currentWorkspace.id ? {
                     ...w, projects: w.projects.map((p) =>
@@ -102,7 +112,27 @@ const workspaceSlice = createSlice({
                 } : w
             );
         }
+    },
+    extraReducers: (builder) => {
+        builder
+            .addCase(fetchWorkspaces.pending, (state) => {
+                state.loading = true;
+            })
+            .addCase(fetchWorkspaces.fulfilled, (state, action) => {
+                state.workspaces = action.payload;
+                state.loading = false;
 
+                if (action.payload.length > 0) {
+                    const currentWorkspaceId = localStorage.getItem("currentWorkspaceId");
+                    const findWorkspace = action.payload.find((w) => w.id === currentWorkspaceId);
+                    state.currentWorkspace = findWorkspace || action.payload[0];
+                } else {
+                    state.currentWorkspace = null;
+                }
+            })
+            .addCase(fetchWorkspaces.rejected, (state) => {
+                state.loading = false;
+            });
     }
 });
 

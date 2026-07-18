@@ -4,19 +4,29 @@ import Sidebar from '../components/Sidebar'
 import { Outlet } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { loadTheme } from '../features/themeSlice'
+import { fetchWorkspaces } from '../features/workspaceSlice'
 import { Loader2Icon } from 'lucide-react'
-import {useUser,SignIn} from '@clerk/react'
+import {useUser,SignIn, useAuth} from '@clerk/react'
 
 const Layout = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-    const { loading } = useSelector((state) => state.workspace)
+    const { loading,workspaces } = useSelector((state) => state.workspace)
     const dispatch = useDispatch()
     const {user,isLoaded} = useUser()
+    const {getToken}=useAuth()
 
     // Initial load of theme
     useEffect(() => {
         dispatch(loadTheme())
     }, [])
+
+    //initial load of workspace 
+    useEffect (()=>{
+        if(isLoaded && user && workspaces.length===0){
+            dispatch(fetchWorkspaces({ getToken }))
+        }
+
+    },[user,isLoaded])
 
     if(!user){
         return(
@@ -33,6 +43,16 @@ const Layout = () => {
             <Loader2Icon className="size-7 text-blue-500 animate-spin" />
         </div>
     )
+    if(workspaces.length===0){
+        return(
+            <div className='min-h-screen flex justify-center items-center px-6'>
+                <div className='text-center max-w-md'>
+                    <h2 className='text-xl font-semibold mb-2'>No workspaces yet</h2>
+                    <p className='text-sm text-gray-600 dark:text-gray-400'>Your workspace list is empty right now. Refresh after your backend returns data.</p>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="flex bg-white dark:bg-zinc-950 text-gray-900 dark:text-slate-100">
