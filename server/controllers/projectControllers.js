@@ -3,7 +3,23 @@ import prisma from '../src/db.js'
 export const createProject= async (req,res)=>{
     try{
           const {userId} = await req.auth()
-        const{workspaceId,name,description,status,start_Date,end_Date,team_Members,team_Lead,progress,priority}=req.body
+        const {
+            workspaceId,
+            name,
+            description,
+            status,
+            start_date,
+            end_date,
+            team_members,
+            team_lead,
+            progress,
+            priority
+        } = req.body
+
+        const startDate = req.body.start_Date ?? start_date
+        const endDate = req.body.end_Date ?? end_date
+        const teamMembers = req.body.team_Members ?? team_members
+        const teamLeadEmail = req.body.team_Lead ?? team_lead
 
         //check if the user has a admnin role in the workspace
         const workspace = await prisma.workspace.findUnique({
@@ -17,12 +33,21 @@ export const createProject= async (req,res)=>{
             return res.status(403).json({message:'Yyou dont have permission to create project in this workspace'})
         }
 
+        if(!teamLeadEmail){
+            return res.status(400).json({message:'Please select a team lead'})
+        }
+
         //get TeamLead using email
         const teamLead = await prisma.user.findUnique({
-            where: { email: team_Lead },
+            where: { email: teamLeadEmail },
             select: { id: true }
 
         })
+
+        if(!teamLead){
+            return res.status(404).json({message:'Selected team lead not found'})
+        }
+
         const project = await prisma.project.create({
             data:{
                     workspaceId,
@@ -31,18 +56,18 @@ export const createProject= async (req,res)=>{
                     status,
                     priority,
                     progress,
-                    team_lead: teamLead?.id || null,
-                    start_Date:start_Date ? new Date(start_Date) : null,
-                    end_Date:end_Date ? new Date(end_Date) : null,
+                    team_lead: teamLead.id,
+                    start_date: startDate ? new Date(startDate) : null,
+                    end_date: endDate ? new Date(endDate) : null,
                     
             }
         })
 
         //add team members to project if they are in a workspace
-        if( team_Members?.length > 0){
+        if( teamMembers?.length > 0){
             const membersToAdd = []
             workspace.members.forEach(member=>{
-                if(team_Members.includes(member.user.email)){
+                if(teamMembers.includes(member.user.email)){
                     membersToAdd.push(member.user.id)
                 }
             })
@@ -58,9 +83,9 @@ export const createProject= async (req,res)=>{
 
         const projectWithMembers = await prisma.project.findUnique({
             where: { id: project.id },
-            includes:{
+            include:{
                 members:{include:{user:true}},
-                task:{include:{assignedTo:true,comments:{include:{user:true}}}},
+                tasks:{include:{comments:{include:{user:true}}}},
                 owner:true
             }
         })
